@@ -88,6 +88,25 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  
+  // Prioridade padrao
+  p->priority = 2;
+
+  // Numero de ticks de execucao do processo
+  p->quantum = 0;
+
+  // Tempo na fila de READY (realizar o aging)
+  p->queue_time = 0;
+
+  // Metricas de tempo para o processo
+  p->stime = 0;
+  p->retime = 0;
+  p->rutime = 0;
+
+  // Tempo de criacao do processo
+  acquire(&tickslock);
+  p->ctime = ticks;
+  release(&tickslock);
 
   release(&ptable.lock);
 
@@ -214,6 +233,20 @@ fork(void)
 
   acquire(&ptable.lock);
 
+  // Reseta as propriedades do processo
+  // Prioridade padrao
+  np->priority = 2;
+
+  // Numero de ticks de execucao do processo
+  np->quantum = 0;
+
+  // Tempo na fila de READY (realizar o aging)
+  np->queue_time = 0;
+
+  // Metricas de tempo para o processo
+  np->stime = 0;
+  np->retime = 0;
+  np->rutime = 0;
   np->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -311,6 +344,184 @@ wait(void)
   }
 }
 
+// Aumenta o quantum do processo em execucao
+// e incrementa a metrica respectiva de cada
+// processo de acordo com o seu estado atual
+void 
+increase_times()
+{
+  struct proc* p;
+
+  acquire(&ptable.lock);
+
+  for(p=ptable.proc;p < &ptable.proc[NPROC];p++)
+  {
+    if(p->state == RUNNABLE)
+    {
+      p->retime++;
+      p->queue_time++;
+    }
+
+    if(p->state == RUNNING)
+    {
+      p->rutime++;
+      p->quantum++;
+    }
+
+    if(p->state == SLEEPING)
+    {
+      p->stime++;
+    }
+  }
+  
+  release(&ptable.lock);
+}
+
+// Chamada de sistema para executar a funcao yield
+// Essa sys call foi criada pois, por padrao, nao
+// conseguimos chamar a funcao yield arbitrariamente
+// Assim, essa sys call age, em suma, como um wrapper
+// para executar yield e o processo largar a CPU
+void
+yield2()
+{
+  yield();
+}
+
+// Copia identica do wait original com algumas mudancas
+// A mudanca principal eh o parametro de prioridade, que
+// passa para a funcao que chamou a prioridade do processo
+// Alem disso, os tempos na fila de READY e RUNNING tambem
+// sao obtidos atraves dos parametros
+int wait3(int *priority, int *retime, int *rutime)
+{
+  struct proc *p;
+  int havekids, pid;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != curproc)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Coloca nos ponteiros o valor das metricas
+        // do processo antes dele ser terminado
+        *priority = p->priority;
+        *retime = p->retime;
+        *rutime = p->rutime;
+
+        // Found one.
+        pid = p->pid;
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+
+        // Reseta as metricas adicionadas
+        p->ctime = 0;
+        p->retime = 0;
+        p->rutime = 0;
+        p->stime = 0;
+
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || curproc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+  }
+}
+
+// Copia identica do wait original com as mudancas propostas
+int wait2(int *retime, int *rutime, int *stime)
+{
+  struct proc *p;
+  int havekids, pid;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != curproc)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Coloca nos ponteiros o valor das metricas
+        // do processo antes dele ser terminado
+        *retime = p->retime;
+        *rutime = p->rutime;
+        *stime = p->stime;
+
+        // Found one.
+        pid = p->pid;
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+
+        // Reseta as metricas adicionadas
+        p->ctime = 0;
+        p->retime = 0;
+        p->rutime = 0;
+        p->stime = 0;
+
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || curproc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+  }
+}
+
+int
+change_prio(int priority)
+{
+  if (priority <= 0 || priority > 3)
+    return -1;
+
+  acquire(&ptable.lock);
+  struct proc *p = myproc();
+
+  // cprintf("\nprioridade antes: %d\n", p->priority);
+
+  p->priority = priority;
+
+  // cprintf("prioridade depois: %d\n", p->priority);
+
+  release(&ptable.lock);
+
+  return 0;
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -322,7 +533,7 @@ wait(void)
 void
 scheduler(void)
 {
-  struct proc *p;
+  struct proc *p, *q;
   struct cpu *c = mycpu();
   c->proc = 0;
   
@@ -330,11 +541,59 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
+    struct proc *high;
+
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+
+    // Mecanismo de aging para evitar inanicao
+    // Realiza o aging antes de escolher um processo
+    // para ser executado
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    {
+      if (p->state != RUNNABLE)
         continue;
+      
+      if (p->priority == 1 && p->queue_time >= Q1TOQ2)
+      {
+        p->priority = 2;
+        p->queue_time = 0;
+        continue;
+      }
+
+      if (p->priority == 2 && p->queue_time >= Q2TOQ3)
+      {
+        p->priority = 3;
+        p->queue_time = 0;
+        continue;
+      }
+    }
+
+
+    // Escalonador percorre toda a lista de processos
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    {
+      // Processo nao esta pronto para executar -> vai para o proximo
+      if (p->state != RUNNABLE)
+        continue;
+
+      high = p;
+      
+      // Percorre a tabela de processos prontos para executar
+      // e escolhe aquele com maior prioridade
+      for (q = ptable.proc; q < &ptable.proc[NPROC]; q++)
+      {
+        // Processo nao esta pronto para executar -> vai para o proximo
+        if(q->state != RUNNABLE)
+          continue;
+        
+        // Processo com prioridade maior que a maior prioridade
+        // observada ate o momento
+        if(q->priority > high->priority)
+          high = q;
+      }
+
+      // Define ele como proximo processo a executar
+      p = high;
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -343,6 +602,11 @@ scheduler(void)
       switchuvm(p);
       p->state = RUNNING;
 
+      // Comecou a executar, reseta o tempo de queue e o quantum
+      // disponivel para o processo
+      p->queue_time = 0;
+      p->quantum = 0;
+
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -350,8 +614,8 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    release(&ptable.lock);
 
+    release(&ptable.lock);
   }
 }
 

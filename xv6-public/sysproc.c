@@ -8,6 +8,50 @@
 #include "proc.h"
 
 int
+sys_yield2(void)
+{
+  yield2();
+  return 0; // provavelmente nao eh alcancado
+}
+
+int
+sys_wait3(void)
+{
+  int *priority;
+  int *retime;
+  int *rutime;
+
+  argptr(0, (char**)&priority, sizeof(int));
+  argptr(1, (char**)&retime, sizeof(int));
+  argptr(2, (char**)&rutime, sizeof(int));
+
+  return wait3(priority, retime, rutime);
+}
+
+int
+sys_wait2(void)
+{
+  int *retime;
+  int *rutime;
+  int *stime;
+
+  argptr(0, (char**)&retime, sizeof(int));
+  argptr(1, (char**)&rutime, sizeof(int));
+  argptr(2, (char**)&stime, sizeof(int));
+
+  return wait2(retime, rutime, stime);
+}
+
+int
+sys_change_prio(void)
+{
+  int priority;
+  argint(0, &priority);
+
+  return change_prio(priority);
+}
+
+int
 sys_fork(void)
 {
   return fork();
