@@ -503,6 +503,35 @@ int wait2(int *retime, int *rutime, int *stime)
 }
 
 int
+set_prio(int priority, int pid)
+{
+  int priority_changed = 0;
+
+  if (priority <= 0 || priority > 3)
+    return -1;
+
+  acquire(&ptable.lock);
+  struct proc *p;
+
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+    if (p->pid == pid)
+    {
+      p->priority = priority;
+      priority_changed = 1;
+      break;
+    }
+  }
+
+  release(&ptable.lock);
+
+  if (priority_changed == 0)
+    return -1;
+
+  return 0;
+}
+
+int
 change_prio(int priority)
 {
   if (priority <= 0 || priority > 3)
@@ -511,11 +540,7 @@ change_prio(int priority)
   acquire(&ptable.lock);
   struct proc *p = myproc();
 
-  // cprintf("\nprioridade antes: %d\n", p->priority);
-
   p->priority = priority;
-
-  // cprintf("prioridade depois: %d\n", p->priority);
 
   release(&ptable.lock);
 

@@ -43,6 +43,17 @@ sys_wait2(void)
 }
 
 int
+sys_set_prio(void)
+{
+  int priority, pid;
+
+  argint(0, &priority);
+  argint(1, &pid);
+
+  return set_prio(priority, pid);
+}
+
+int
 sys_change_prio(void)
 {
   int priority;

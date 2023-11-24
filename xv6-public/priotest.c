@@ -5,21 +5,20 @@
 
 int main(int argc, char *argv[])
 {
-  int proc_count = 40;
+  int proc_count = 20;
 
   for (int i = 0; i < proc_count; i++) {
     int pid = fork();
 
     if (pid == 0) {
-      int proc_prio = (getpid() % 3) + 1; // 1 a 3
-
-      change_prio(proc_prio);
-
       for (int j = 0; j < 100; j++)
         for (int k = 0; k < 1000000; k++)
           asm("nop");
 
       exit();
+    } else {
+      // Pai seta a prioridade do filho
+      set_prio((pid % 3) + 1, pid);
     }
   }
 

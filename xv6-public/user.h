@@ -27,6 +27,7 @@ int change_prio(int);
 int wait2(int*, int*, int*);
 int yield2(void);
 int wait3(int*, int*, int*);
+int set_prio(int, int);
 
 // ulib.c
 int stat(const char*, struct stat*);
