@@ -243,6 +243,10 @@ fork(void)
   // Tempo na fila de READY (realizar o aging)
   np->queue_time = 0;
 
+  acquire(&tickslock);
+  np->ctime = ticks;
+  release(&tickslock);
+
   // Metricas de tempo para o processo
   np->stime = 0;
   np->retime = 0;
@@ -348,7 +352,7 @@ wait(void)
 // e incrementa a metrica respectiva de cada
 // processo de acordo com o seu estado atual
 void 
-increase_times()
+update_time_attrs()
 {
   struct proc* p;
 

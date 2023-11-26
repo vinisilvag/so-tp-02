@@ -121,7 +121,7 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 int             change_prio(int);
-void            increase_times();
+void            update_time_attrs();
 int             wait2(int*, int*, int*);
 void            yield2(void);
 int             wait3(int*, int*, int*);
