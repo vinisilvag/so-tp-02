@@ -11,6 +11,7 @@ int main(int argc, char *argv[])
     int pid = fork();
 
     if (pid == 0) {
+      // Processo CPU-Bound
       for (int j = 0; j < 100; j++)
         for (int k = 0; k < 1000000; k++)
           asm("nop");

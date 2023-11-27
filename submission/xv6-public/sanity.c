@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 
         // nop usado pois eh o mais proximo de executar os loops
         // "sem fazer nada" mas ainda executar alguma instrucao de maquina
-        for (int j = 0; j < 100; j++) {
+        for (int j = 0; j < 20; j++) {
           for (int k = 0; k < 1000000; k++)
             asm("nop");
           yield2();
